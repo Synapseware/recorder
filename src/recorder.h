@@ -38,8 +38,12 @@
 
 
 
-
+//-------------------------------------------------
+// DAC methods
+#define DAC_OutStd(v)	((256 * v) / 2.048)
+#define DAC_OutHigh(v)	((256 * v) / 4.096)
 void DACOutputHighGain(uint8_t voltage);
+void DACOutputStdGain(uint8_t voltage);
 
 
 

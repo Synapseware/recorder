@@ -80,22 +80,12 @@ int main(void)
 {
 	Setup();
 
-	uint8_t voltage = 0;
-	//uint8_t delay = 5;
+	DACOutputStdGain(DAC_OutStd(0.5));
 
 	while(1)
 	{
 		if (_secondsTick)
 		{
-			//delay--;
-			//if (!delay)
-			{
-			//	delay = 5;
-
-				DACOutputHighGain(voltage);
-				voltage += 16;
-			}
-
 			_secondsTick = false;
 		}
 	}
@@ -107,6 +97,21 @@ void DACOutputHighGain(uint8_t voltage)
 {
 	uint16_t dacBits = voltage << 4;
 	dacBits |=	(1<<13) |	// set high gain
+				(1<<12);	// disable shutdown
+
+	SPI_port &= ~(SPI_ss);
+
+	SPI_SendByte(dacBits >> 8);
+	SPI_SendByte(dacBits & 0xFF);
+
+	SPI_port |= (SPI_ss);
+}
+
+/** Writes an output voltage value to the DAC */
+void DACOutputStdGain(uint8_t voltage)
+{
+	uint16_t dacBits = voltage << 4;
+	dacBits |=	(0<<13) |	// clear high gain
 				(1<<12);	// disable shutdown
 
 	SPI_port &= ~(SPI_ss);
