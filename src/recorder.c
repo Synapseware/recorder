@@ -1,31 +1,25 @@
 #include "recorder.h"
 
 
+volatile bool _secondsTick = false;
 
 
 /**  */
 void SetupSpi(void)
 {
-	// SPI Control Register
-	SPCR	=	(0<<SPIE)	|   // Bit 7 – SPIE: SPI Interrupt Enable
-				(1<<SPE)	|   // Bit 6 – SPE: SPI Enable
-				(0<<DORD)	|   // Bit 5 – DORD: Data Order
-				(1<<MSTR)	|   // Bit 4 – MSTR: Master/Slave Select
-				(0<<CPOL)	|   // Bit 3 – CPOL: Clock Polarity
-				(0<<CPHA)	|   // Bit 2 – CPHA: Clock Phase
-				(0<<SPR1)	|	// Bit 1 - SPR1: SPI Clock Rate Select
-				(1<<SPR0);	  	// Bit 0 - SPR0: SPI Clock Rate Select
-	
-	// SPI Status Register
-	SPSR	=	(0<<SPIF)	|   // Bit 7 – SPIF: SPI Interrupt Flag
-				(0<<WCOL)	|   // Bit 6 – WCOL: Write COLlision Flag
-				(0<<SPI2X);		// Bit 0 – SPI2X: Double SPI Speed Bit
+	power_spi_enable();
 
-	SPI_ddr |=	(SPI_sck)	|	// SCK
-				(SPI_mosi)	|	// MOSI
-				(SPI_ss);		// SS
+	SPI_Init(
+		SPI_MODE_MASTER |
+		SPI_ORDER_MSB_FIRST |
+		SPI_SCK_LEAD_RISING |
+		SPI_SAMPLE_LEADING |
+		SPI_SPEED_FCPU_DIV_16
+	);
 
-	SPI_ddr &=	~(SPI_miso);	// MISO
+	// set /SS pin as output
+	SPI_ddr |= (SPI_ss);
+	SPI_port |= (SPI_ss);
 }
 
 /**  */
@@ -69,6 +63,9 @@ void SetupTimers(void)
 /**  */
 void Setup(void)
 {
+	_secondsTick = false;
+
+	power_all_enable();
 	SetupSpi();
 	SetupTimers();
 
@@ -83,9 +80,24 @@ int main(void)
 {
 	Setup();
 
+	uint8_t voltage = 0;
+	//uint8_t delay = 5;
+
 	while(1)
 	{
+		if (_secondsTick)
+		{
+			//delay--;
+			//if (!delay)
+			{
+			//	delay = 5;
 
+				DACOutputHighGain(voltage);
+				voltage += 16;
+			}
+
+			_secondsTick = false;
+		}
 	}
 }
 
@@ -96,9 +108,14 @@ void DACOutputHighGain(uint8_t voltage)
 	uint16_t dacBits = voltage << 4;
 	dacBits |=	(1<<13) |	// set high gain
 				(1<<12);	// disable shutdown
+
+	SPI_port &= ~(SPI_ss);
+
+	SPI_SendByte(dacBits >> 8);
+	SPI_SendByte(dacBits & 0xFF);
+
+	SPI_port |= (SPI_ss);
 }
-
-
 
 /** Millisecond heartbeats */
 ISR(TIMER0_COMPA_vect)
@@ -118,5 +135,6 @@ ISR(TIMER0_COMPA_vect)
 	if (ticks++ > 999)
 	{
 		ticks = 0;
+		_secondsTick = true;
 	}
 }
