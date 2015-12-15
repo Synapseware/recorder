@@ -43,6 +43,7 @@ arduino/arduino-1.0.5/
 #Ignore build artifacts
 *.o
 *.a
+*.d
 *.lst
 *.eep
 *.hex
