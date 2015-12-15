@@ -33,6 +33,7 @@ F_USB			= $(F_CPU)
 OPTIMIZATION	= s
 TARGET			= recorder
 SRC				= $(TARGET).c \
+				Descriptors.c \
 				$(LUFA_SRC_USB) \
 				$(LUFA_SRC_USBCLASS) \
 				$(LUFA_SRC_SERIAL) \
