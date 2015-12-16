@@ -37,6 +37,14 @@
 #define SPI_ddr			(DDRB)
 
 
+//-------------------------------------------------
+// External SPI ADC
+#define ADC_port		(PORTD)
+#define ADC_sck			(1<<PD0)
+#define ADC_data		(1<<PD1)
+#define ADC_ss			(1<<PD2)
+#define ADC_ddr			(DDRD)
+
 
 //-------------------------------------------------
 // DAC methods

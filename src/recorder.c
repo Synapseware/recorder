@@ -22,6 +22,15 @@ void SetupSpi(void)
 	SPI_port |= (SPI_ss);
 }
 
+/** Configures the I/O pins for the external ADC */
+void SetupExternalAdc(void)
+{
+	ADC_ddr |= (ADC_sck | ADC_ss);
+	ADC_ddr &= ~(ADC_data);
+
+	ADC_port |= (ADC_sck | ADC_ss);
+}
+
 /**  */
 void SetupTimers(void)
 {
@@ -120,6 +129,47 @@ void DACOutputStdGain(uint8_t voltage)
 	SPI_SendByte(dacBits & 0xFF);
 
 	SPI_port |= (SPI_ss);
+}
+
+/** Reads a 12-bit sample from the ADC */
+uint16_t ADC_ReadSample(void)
+{
+	uint8_t bits = 12;
+	uint16_t sample = 0;
+
+	uint8_t sreg = SREG;
+	cli();
+
+
+	// toggle ADC /SS
+	ADC_port &= ~(ADC_ss);
+
+	while(bits--)
+	{
+		// toggle ADC SCK low
+		ADC_port &= ~(ADC_sck);
+
+		// shift sample
+		sample <<= 1;
+		
+		// toggle ADC SCK high
+		ADC_port |= (ADC_sck);
+
+		// add data
+		sample |= ((ADC_port & ADC_data) != 0)
+			? 1
+			: 0;
+	}
+
+	// release ADC /SS
+	ADC_port |= (ADC_ss);
+
+	// return the interrupt mask
+	SREG = sreg;
+
+	sample &= 0x0FFF;
+
+	return sample;
 }
 
 /** Millisecond heartbeats */
