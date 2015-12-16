@@ -11,6 +11,9 @@
 #include <stdint.h>
 #include <math.h>
 
+#include "Descriptors.h"
+#include "Config/AppConfig.h"
+
 #include <LUFA/Drivers/Peripheral/Serial.h>
 #include <LUFA/Drivers/Peripheral/SPI.h>
 #include <LUFA/Drivers/Board/LEDs.h>

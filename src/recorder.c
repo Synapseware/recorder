@@ -3,6 +3,42 @@
 
 volatile bool _secondsTick = false;
 
+/** LUFA CDC Class driver interface configuration and state information. This structure is
+ *  passed to all CDC Class driver functions, so that multiple instances of the same class
+ *  within a device can be differentiated from one another.
+ */
+USB_ClassInfo_CDC_Device_t VirtualSerial_CDC_Interface =
+	{
+		.Config =
+			{
+				.ControlInterfaceNumber   = INTERFACE_ID_CDC_CCI,
+				.DataINEndpoint           =
+					{
+						.Address          = CDC_TX_EPADDR,
+						.Size             = CDC_TXRX_EPSIZE,
+						.Banks            = 1,
+					},
+				.DataOUTEndpoint =
+					{
+						.Address          = CDC_RX_EPADDR,
+						.Size             = CDC_TXRX_EPSIZE,
+						.Banks            = 1,
+					},
+				.NotificationEndpoint =
+					{
+						.Address          = CDC_NOTIFICATION_EPADDR,
+						.Size             = CDC_NOTIFICATION_EPSIZE,
+						.Banks            = 1,
+					},
+			},
+	};
+
+/** Standard file stream for the CDC interface when set up, so that the virtual CDC COM port can be
+ *  used like any regular character stream in the C APIs.
+ */
+static FILE USBSerialStream;
+
+
 
 /**  */
 void SetupSpi(void)
@@ -81,14 +117,17 @@ void Setup(void)
 
 	// setup debug LED
 	DEBUG_LED_ddr |= (DEBUG_LED_msk);
-
-	sei();
 }
 
 /**  */
 int main(void)
 {
 	Setup();
+
+	/* Create a regular blocking character stream for the interface so that it can be used with the stdio.h functions */
+	CDC_Device_CreateBlockingStream(&VirtualSerial_CDC_Interface, &USBSerialStream);
+
+	GlobalInterruptEnable();
 
 	DACOutputStdGain(DAC_OutStd(0.5));
 
@@ -98,9 +137,12 @@ int main(void)
 		{
 			_secondsTick = false;
 		}
+
+
+		CDC_Device_USBTask(&VirtualSerial_CDC_Interface);
+		USB_USBTask();
 	}
 }
-
 
 /** Writes an output voltage value to the DAC */
 void DACOutputHighGain(uint8_t voltage)
@@ -171,6 +213,18 @@ uint16_t ADC_ReadSample(void)
 	sample &= 0x0FFF;
 
 	return sample;
+}
+
+/** Event handler for the library USB Configuration Changed event. */
+void EVENT_USB_Device_ConfigurationChanged(void)
+{
+	CDC_Device_ConfigureEndpoints(&VirtualSerial_CDC_Interface);
+}
+
+/** Event handler for the library USB Control Request reception event. */
+void EVENT_USB_Device_ControlRequest(void)
+{
+	CDC_Device_ProcessControlRequest(&VirtualSerial_CDC_Interface);
 }
 
 /** Millisecond heartbeats */
