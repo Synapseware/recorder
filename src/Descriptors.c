@@ -200,13 +200,8 @@ const USB_Descriptor_String_t PROGMEM ProductString = USB_STRING_DESCRIPTOR(L"LU
  *  USB host.
  */
 uint16_t CALLBACK_USB_GetDescriptor(const uint16_t wValue,
-			                                    const uint8_t wIndex,
-			                                    const void** const DescriptorAddress
-			#if (defined(ARCH_HAS_MULTI_ADDRESS_SPACE) || defined(__DOXYGEN__)) && \
-			    !(defined(USE_FLASH_DESCRIPTORS) || defined(USE_EEPROM_DESCRIPTORS) || defined(USE_RAM_DESCRIPTORS))
-			                                    , uint8_t* const DescriptorMemorySpace
-			#endif
-			                                    )
+                                    const uint8_t wIndex,
+                                    const void** const DescriptorAddress)
 {
 	const uint8_t  DescriptorType   = (wValue >> 8);
 	const uint8_t  DescriptorNumber = (wValue & 0xFF);
@@ -243,10 +238,6 @@ uint16_t CALLBACK_USB_GetDescriptor(const uint16_t wValue,
 
 			break;
 	}
-
-	#if defined(HAS_MULTIPLE_DESCRIPTOR_ADDRESS_SPACES)
-	*DescriptorMemorySpace = MEMSPACE_RAM;
-	#endif
 
 	*DescriptorAddress = Address;
 	return Size;
