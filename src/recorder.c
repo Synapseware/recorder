@@ -77,6 +77,7 @@ void Setup(void)
 	power_all_enable();
 	SetupSpi();
 	SetupTimers();
+	SetupExternalAdc();
 
 	// setup debug LED
 	DEBUG_LED_ddr |= (DEBUG_LED_msk);
@@ -105,7 +106,7 @@ int main(void)
 void DACOutputHighGain(uint8_t voltage)
 {
 	uint16_t dacBits = voltage << 4;
-	dacBits |=	(1<<13) |	// set high gain
+	dacBits |=	(0<<13) |	// set high gain
 				(1<<12);	// disable shutdown
 
 	SPI_port &= ~(SPI_ss);
@@ -120,7 +121,7 @@ void DACOutputHighGain(uint8_t voltage)
 void DACOutputStdGain(uint8_t voltage)
 {
 	uint16_t dacBits = voltage << 4;
-	dacBits |=	(0<<13) |	// clear high gain
+	dacBits |=	(1<<13) |	// clear high gain
 				(1<<12);	// disable shutdown
 
 	SPI_port &= ~(SPI_ss);
