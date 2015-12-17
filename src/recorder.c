@@ -1,7 +1,9 @@
 #include "recorder.h"
 
 
-volatile bool _secondsTick = false;
+volatile bool 		_secondsTick 		= false;
+volatile bool		_hostConnected		= false;
+
 
 /** LUFA CDC Class driver interface configuration and state information. This structure is
  *  passed to all CDC Class driver functions, so that multiple instances of the same class
@@ -38,6 +40,33 @@ USB_ClassInfo_CDC_Device_t VirtualSerial_CDC_Interface =
  */
 static FILE USBSerialStream;
 
+static void PrintString_P(const char* message)
+{
+	if (!_hostConnected || NULL == message)
+		return;
+
+	fputs_P(message, &USBSerialStream);
+}
+static void PrintString(const char* message)
+{
+	if (!_hostConnected || NULL == message)
+		return;
+
+	fputs(message, &USBSerialStream);
+}
+static void PrintChar(char data)
+{
+	if (!_hostConnected)
+		return;
+
+	fputc(data, &USBSerialStream);
+}
+static void PrintFlush(void)
+{
+	if (!_hostConnected)
+		return;
+	CDC_Device_Flush(&VirtualSerial_CDC_Interface);
+}
 
 
 /**  */
@@ -106,7 +135,7 @@ void SetupTimers(void)
 }
 
 /**  */
-void Setup(void)
+void SetupHardware(void)
 {
 	_secondsTick = false;
 
@@ -115,14 +144,19 @@ void Setup(void)
 	SetupTimers();
 	SetupExternalAdc();
 
+	USB_Init();
+
 	// setup debug LED
 	DEBUG_LED_ddr |= (DEBUG_LED_msk);
+
+	USB_LED_ddr |= (USB_LED_msk);
+	USB_LED_port &= ~(USB_LED_msk);
 }
 
 /**  */
 int main(void)
 {
-	Setup();
+	SetupHardware();
 
 	/* Create a regular blocking character stream for the interface so that it can be used with the stdio.h functions */
 	CDC_Device_CreateBlockingStream(&VirtualSerial_CDC_Interface, &USBSerialStream);
@@ -131,11 +165,16 @@ int main(void)
 
 	DACOutputStdGain(DAC_OutStd(0.5));
 
+	PrintString_P(PSTR("Audio Recorder and Sampling Prototype\r\n"));
+	PrintFlush();
+
 	while(1)
 	{
 		if (_secondsTick)
 		{
 			_secondsTick = false;
+			PrintChar('.');
+			PrintFlush();
 		}
 
 
@@ -218,13 +257,31 @@ uint16_t ADC_ReadSample(void)
 /** Event handler for the library USB Configuration Changed event. */
 void EVENT_USB_Device_ConfigurationChanged(void)
 {
+	// 
 	CDC_Device_ConfigureEndpoints(&VirtualSerial_CDC_Interface);
 }
 
 /** Event handler for the library USB Control Request reception event. */
 void EVENT_USB_Device_ControlRequest(void)
 {
+	// 
 	CDC_Device_ProcessControlRequest(&VirtualSerial_CDC_Interface);
+}
+
+/** Event handler for the library USB Connection event. */
+void EVENT_USB_Device_Connect(void)
+{
+	// mark host as connected
+	_hostConnected = true;
+	USB_LED_port |= (USB_LED_msk);
+}
+
+/** Event handler for the library USB Disconnection event. */
+void EVENT_USB_Device_Disconnect(void)
+{
+	// mark host as not connected
+	_hostConnected = false;
+	USB_LED_port &= ~(USB_LED_msk);
 }
 
 /** Millisecond heartbeats */
@@ -237,9 +294,16 @@ ISR(TIMER0_COMPA_vect)
 		// toggle debug LED
 		DEBUG_LED_port |= (DEBUG_LED_msk);
 	}
-	else if (15 == ticks)
+	else
 	{
-		DEBUG_LED_port &= ~(DEBUG_LED_msk);
+		if (_hostConnected && 15 == ticks)
+		{
+			DEBUG_LED_port &= ~(DEBUG_LED_msk);
+		}
+		else if (!_hostConnected && 500 == ticks)
+		{
+			DEBUG_LED_port &= ~(DEBUG_LED_msk);
+		}
 	}
 
 	if (ticks++ > 999)
