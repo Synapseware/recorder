@@ -31,6 +31,14 @@
 
 
 //-------------------------------------------------
+// USB status LED
+#define USB_LED_msk		(1<<PD7)
+#define USB_LED_port	(PORTD)
+#define USB_LED_ddr		(DDRD)
+#define USB_LED_pin		(PIND)
+
+
+//-------------------------------------------------
 // SPI pins - standard
 #define SPI_port		(PORTB)
 #define SPI_sck			(1<<PB1)
