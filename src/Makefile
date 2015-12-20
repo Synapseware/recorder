@@ -27,9 +27,9 @@ FUSE_3			= 0xFB
 
 MCU				= atmega32u4
 ARCH			= AVR8
-BOARD			= ADAFRUITU4
+BOARD			= USER
 F_CPU			= 16000000
-F_USB			= $(F_CPU)
+F_USB			= 16000000
 OPTIMIZATION	= s
 TARGET			= recorder
 SRC				= $(TARGET).c \
@@ -57,6 +57,8 @@ include $(LUFA_PATH)/Build/lufa_avrdude.mk
 include $(LUFA_PATH)/Build/lufa_atprogram.mk
 
 
+#program: all
+#	avrdude -p $(MCU) -P /dev/ttyACM0 -c avrisp2 -U flash:w:$(TARGET).hex
 program: all
-	avrdude -p $(MCU) -P /dev/ttyACM0 -c avrisp2 -U flash:w:$(TARGET).hex
+	avrdude -p $(MCU) -B 0.1 -c usbtiny -U flash:w:$(TARGET).hex
 
