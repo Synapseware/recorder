@@ -51,11 +51,11 @@
 
 //-------------------------------------------------
 // External SPI ADC
-#define ADC_port		(PORTD)
-#define ADC_sck			(1<<PD0)
-#define ADC_data		(1<<PD1)
-#define ADC_ss			(1<<PD2)
-#define ADC_ddr			(DDRD)
+#define ADC_port		(PORTB)
+#define ADC_clk			(1<<PB6)
+#define ADC_data		(1<<PB5)
+#define ADC_ss			(1<<PB4)
+#define ADC_ddr			(DDRB)
 
 
 //-------------------------------------------------

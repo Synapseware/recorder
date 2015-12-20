@@ -3,6 +3,7 @@
 
 volatile bool 		_secondsTick 		= false;
 volatile bool		_hostConnected		= false;
+volatile bool		_greetingSent		= false;
 RingBuffer_t		Buffer;
 uint8_t				BufferData[128];
 
@@ -15,23 +16,23 @@ USB_ClassInfo_CDC_Device_t VirtualSerial_CDC_Interface =
 	{
 		.Config =
 			{
-				.ControlInterfaceNumber   = INTERFACE_ID_CDC_CCI,
-				.DataINEndpoint		   =
+				.ControlInterfaceNumber = INTERFACE_ID_CDC_CCI,
+				.DataINEndpoint 		=
 					{
-						.Address		  = CDC_TX_EPADDR,
-						.Size			 = CDC_TXRX_EPSIZE,
+						.Address		= CDC_TX_EPADDR,
+						.Size			= CDC_TXRX_EPSIZE,
 						.Banks			= 1,
 					},
 				.DataOUTEndpoint =
 					{
-						.Address		  = CDC_RX_EPADDR,
-						.Size			 = CDC_TXRX_EPSIZE,
+						.Address		= CDC_RX_EPADDR,
+						.Size			= CDC_TXRX_EPSIZE,
 						.Banks			= 1,
 					},
 				.NotificationEndpoint =
 					{
-						.Address		  = CDC_NOTIFICATION_EPADDR,
-						.Size			 = CDC_NOTIFICATION_EPSIZE,
+						.Address		= CDC_NOTIFICATION_EPADDR,
+						.Size			= CDC_NOTIFICATION_EPSIZE,
 						.Banks			= 1,
 					},
 			},
@@ -92,10 +93,10 @@ void SetupSpi(void)
 /** Configures the I/O pins for the external ADC */
 void SetupExternalAdc(void)
 {
-	ADC_ddr |= (ADC_sck | ADC_ss);
+	ADC_ddr |= (ADC_clk | ADC_ss);
 	ADC_ddr &= ~(ADC_data);
 
-	ADC_port |= (ADC_sck | ADC_ss);
+	ADC_port |= (ADC_clk | ADC_ss);
 }
 
 /**  */
@@ -124,9 +125,6 @@ void SetupTimers(void)
 		// Output Compare Register A
 		OCR0A   =   250-1;
 
-		// Output Compare Register B
-		OCR0B   =   0;
-
 		// Timer/Counter Interrupt Mask Register
 		TIMSK0  =   (0<<OCIE0B)	|
 					(1<<OCIE0A)	|
@@ -150,29 +148,13 @@ void SetupTimers(void)
 					(0<<ICES1)  |
 					(0<<WGM13)  |	// ctc
 					(1<<WGM12)  |	// ctc
-					(0<<CS12)   |	// clk/8
-					(1<<CS11)   |	// clk/8
-					(0<<CS10);		// clk/8
+					(0<<CS12)   |	// clk/1
+					(0<<CS11)   |	// clk/1
+					(1<<CS10);		// clk/1
 
-		// Timer/Counter1 Control Register C
-		TCCR1C  =   (0<<FOC1A)  |
-					(0<<FOC1B)  |
-					(0<<FOC1C);
-
-		// Timer/Counter1
-		TCNT1	=	0;
 
 		// Output Compare Register 1 A
-		OCR1A	=	0;
-
-		// Output Compare Register 1 B
-		OCR1B	=	0;
-
-		// Output Compare Register 1 C
-		OCR1C	=	0;
-
-		// Input Capture Register 1
-		ICR1	=	0;
+		OCR1A	=	F_CPU / 8000;
 
 		// Timer/Counter1 Interrupt Mask Register
 		TIMSK1  =   (0<<ICIE1)  |
@@ -188,6 +170,8 @@ void SetupHardware(void)
 {
 	_secondsTick = false;
 	_hostConnected = false;
+	_greetingSent = false;
+
 	RingBuffer_InitBuffer(&Buffer, BufferData, sizeof(BufferData));
 
 	power_all_enable();
@@ -215,20 +199,29 @@ static void InitialGreeting(void)
 /**  */
 static void PushLatestSampleData(void)
 {
+	static uint8_t col = 0;
+
 	uint16_t count = RingBuffer_GetCount(&Buffer);
 	if (count < 8)
 	{
 		return;
 	}
 
-	char msg[16];
+	char msg[8];
 	while (count--)
 	{
 		uint8_t data = RingBuffer_Remove(&Buffer);
-		sprintf_P(msg, PSTR("%x"), data);
+		sprintf_P(msg, PSTR("%04x "), data);
 		PrintString(msg);
+
+		col++;
+		if (col > 15)
+		{
+			col = 0;
+			PrintString_P(PSTR("\r\n"));
+		}
 	}
-	PrintString_P(PSTR("\r\n"));
+
 	PrintFlush();
 }
 
@@ -236,7 +229,7 @@ static void PushLatestSampleData(void)
 int main(void)
 {
 	SetupHardware();
-	uint8_t delay = 3;
+	uint8_t delay = 1;
 
 	/* Create a regular blocking character stream for the interface so that it can be used with the stdio.h functions */
 	CDC_Device_CreateBlockingStream(&VirtualSerial_CDC_Interface, &USBSerialStream);
@@ -247,18 +240,24 @@ int main(void)
 
 	while(1)
 	{
+		CDC_Device_USBTask(&VirtualSerial_CDC_Interface);
+		USB_USBTask();
+
 		if (_secondsTick)
 		{
 			_secondsTick = false;
 			PrintChar('.');
 			PrintFlush();
 		}
+		else
+		{
+			continue;
+		}
 
-		// reset the host-connected delay
 		if (!_hostConnected)
 		{
-
-			delay = 3;
+			// reset the host-connected delay
+			delay = 1;
 		}
 		else
 		{
@@ -274,9 +273,6 @@ int main(void)
 				}
 			}
 		}
-
-		CDC_Device_USBTask(&VirtualSerial_CDC_Interface);
-		USB_USBTask();
 	}
 }
 
@@ -326,13 +322,13 @@ uint16_t ADC_ReadSample(void)
 	while(bits--)
 	{
 		// toggle ADC SCK low
-		ADC_port &= ~(ADC_sck);
+		ADC_port &= ~(ADC_clk);
 
 		// shift sample
 		sample <<= 1;
 		
 		// toggle ADC SCK high
-		ADC_port |= (ADC_sck);
+		ADC_port |= (ADC_clk);
 
 		// add data
 		sample |= ((ADC_port & ADC_data) != 0)
@@ -372,12 +368,31 @@ void EVENT_USB_Device_ControlRequest(void)
 	CDC_Device_ProcessControlRequest(&VirtualSerial_CDC_Interface);
 }
 
+/**  */
+void EVENT_CDC_Device_ControLineStateChanged(USB_ClassInfo_CDC_Device_t* const CDCInterfaceInfo)
+{
+	bool CurrentDTRState = (CDCInterfaceInfo->State.ControlLineStates.HostToDevice & CDC_CONTROL_LINE_OUT_DTR);
+
+	/* Check if the DTR line has been asserted - if so, start the target AVR's reset pulse */
+	if (CurrentDTRState)
+	{
+		_hostConnected = true;
+		
+		if (!_greetingSent)
+		{
+			_greetingSent = true;
+		}
+
+		USB_LED_port |= (USB_LED_msk);
+	}
+}
+
 /** Event handler for the library USB Connection event. */
 void EVENT_USB_Device_Connect(void)
 {
 	// mark host as connected
-	_hostConnected = true;
-	USB_LED_port |= (USB_LED_msk);
+	//_hostConnected = true;
+	//USB_LED_port |= (USB_LED_msk);
 }
 
 /** Event handler for the library USB Disconnection event. */
@@ -385,6 +400,7 @@ void EVENT_USB_Device_Disconnect(void)
 {
 	// mark host as not connected
 	_hostConnected = false;
+	_greetingSent = false;
 	USB_LED_port &= ~(USB_LED_msk);
 }
 
