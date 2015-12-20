@@ -132,6 +132,9 @@ void SetupTimers(void)
 	}
 
 	// setup timer1 for whatever ADC conversion rate we want
+	{
+
+	}
 }
 
 /**  */
