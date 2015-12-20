@@ -3,6 +3,8 @@
 
 volatile bool 		_secondsTick 		= false;
 volatile bool		_hostConnected		= false;
+RingBuffer_t		Buffer;
+uint8_t				BufferData[128];
 
 
 /** LUFA CDC Class driver interface configuration and state information. This structure is
@@ -14,23 +16,23 @@ USB_ClassInfo_CDC_Device_t VirtualSerial_CDC_Interface =
 		.Config =
 			{
 				.ControlInterfaceNumber   = INTERFACE_ID_CDC_CCI,
-				.DataINEndpoint           =
+				.DataINEndpoint		   =
 					{
-						.Address          = CDC_TX_EPADDR,
-						.Size             = CDC_TXRX_EPSIZE,
-						.Banks            = 1,
+						.Address		  = CDC_TX_EPADDR,
+						.Size			 = CDC_TXRX_EPSIZE,
+						.Banks			= 1,
 					},
 				.DataOUTEndpoint =
 					{
-						.Address          = CDC_RX_EPADDR,
-						.Size             = CDC_TXRX_EPSIZE,
-						.Banks            = 1,
+						.Address		  = CDC_RX_EPADDR,
+						.Size			 = CDC_TXRX_EPSIZE,
+						.Banks			= 1,
 					},
 				.NotificationEndpoint =
 					{
-						.Address          = CDC_NOTIFICATION_EPADDR,
-						.Size             = CDC_NOTIFICATION_EPSIZE,
-						.Banks            = 1,
+						.Address		  = CDC_NOTIFICATION_EPADDR,
+						.Size			 = CDC_NOTIFICATION_EPSIZE,
+						.Banks			= 1,
 					},
 			},
 	};
@@ -133,7 +135,51 @@ void SetupTimers(void)
 
 	// setup timer1 for whatever ADC conversion rate we want
 	{
+		// Timer/Counter1 Control Register A
+		TCCR1A  =   (0<<COM1A1) |
+					(0<<COM1A0) |
+					(0<<COM1B1) |
+					(0<<COM1B0) |
+					(0<<COM1C1) |
+					(0<<COM1C0) |
+					(0<<WGM11)  |	// ctc
+					(0<<WGM10);		// ctc
 
+		// Timer/Counter1 Control Register B
+		TCCR1B  =   (0<<ICNC1)  |
+					(0<<ICES1)  |
+					(0<<WGM13)  |	// ctc
+					(1<<WGM12)  |	// ctc
+					(0<<CS12)   |	// clk/8
+					(1<<CS11)   |	// clk/8
+					(0<<CS10);		// clk/8
+
+		// Timer/Counter1 Control Register C
+		TCCR1C  =   (0<<FOC1A)  |
+					(0<<FOC1B)  |
+					(0<<FOC1C);
+
+		// Timer/Counter1
+		TCNT1	=	0;
+
+		// Output Compare Register 1 A
+		OCR1A	=	0;
+
+		// Output Compare Register 1 B
+		OCR1B	=	0;
+
+		// Output Compare Register 1 C
+		OCR1C	=	0;
+
+		// Input Capture Register 1
+		ICR1	=	0;
+
+		// Timer/Counter1 Interrupt Mask Register
+		TIMSK1  =   (0<<ICIE1)  |
+					(0<<OCIE1C) |
+					(0<<OCIE1B) |
+					(1<<OCIE1A) |	// COMPA
+					(0<<TOIE1);
 	}
 }
 
@@ -141,6 +187,8 @@ void SetupTimers(void)
 void SetupHardware(void)
 {
 	_secondsTick = false;
+	_hostConnected = false;
+	RingBuffer_InitBuffer(&Buffer, BufferData, sizeof(BufferData));
 
 	power_all_enable();
 	SetupSpi();
@@ -157,9 +205,38 @@ void SetupHardware(void)
 }
 
 /**  */
+static void InitialGreeting(void)
+{
+	PrintString_P(PSTR("Audio Recorder and Sampling Prototype\r\n"));
+	PrintString_P(PSTR("November, 2015\r\n"));
+	PrintFlush();
+}
+
+/**  */
+static void PushLatestSampleData(void)
+{
+	uint16_t count = RingBuffer_GetCount(&Buffer);
+	if (count < 8)
+	{
+		return;
+	}
+
+	char msg[16];
+	while (count--)
+	{
+		uint8_t data = RingBuffer_Remove(&Buffer);
+		sprintf_P(msg, PSTR("%x"), data);
+		PrintString(msg);
+	}
+	PrintString_P(PSTR("\r\n"));
+	PrintFlush();
+}
+
+/**  */
 int main(void)
 {
 	SetupHardware();
+	uint8_t delay = 3;
 
 	/* Create a regular blocking character stream for the interface so that it can be used with the stdio.h functions */
 	CDC_Device_CreateBlockingStream(&VirtualSerial_CDC_Interface, &USBSerialStream);
@@ -167,9 +244,6 @@ int main(void)
 	GlobalInterruptEnable();
 
 	DACOutputStdGain(DAC_OutStd(0.5));
-
-	PrintString_P(PSTR("Audio Recorder and Sampling Prototype\r\n"));
-	PrintFlush();
 
 	while(1)
 	{
@@ -180,6 +254,26 @@ int main(void)
 			PrintFlush();
 		}
 
+		// reset the host-connected delay
+		if (!_hostConnected)
+		{
+
+			delay = 3;
+		}
+		else
+		{
+			PushLatestSampleData();
+
+			// send greeting if we've hit our host-timeout and the host is connected
+			if (delay)
+			{
+				delay--;
+				if (!delay)
+				{
+					InitialGreeting();
+				}
+			}
+		}
 
 		CDC_Device_USBTask(&VirtualSerial_CDC_Interface);
 		USB_USBTask();
@@ -257,6 +351,13 @@ uint16_t ADC_ReadSample(void)
 	return sample;
 }
 
+/** Writes the block of data to the SRAM device */
+void SaveSamples(uint8_t * data, int length)
+{
+	// TBD
+
+}
+
 /** Event handler for the library USB Configuration Changed event. */
 void EVENT_USB_Device_ConfigurationChanged(void)
 {
@@ -314,4 +415,13 @@ ISR(TIMER0_COMPA_vect)
 		ticks = 0;
 		_secondsTick = true;
 	}
+}
+
+/** ADC sample & save interrupt handler */
+ISR(TIMER1_COMPA_vect)
+{
+	uint16_t sample = ADC_ReadSample();
+
+	RingBuffer_Insert(&Buffer, sample >> 8);
+	RingBuffer_Insert(&Buffer, sample & 0xFF);
 }
