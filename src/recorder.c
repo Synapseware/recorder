@@ -233,6 +233,7 @@ int main(void)
 {
 	SetupHardware();
 	uint8_t delay = 1;
+	uint8_t recordFor = 0;
 
 	/* Create a regular blocking character stream for the interface so that it can be used with the stdio.h functions */
 	CDC_Device_CreateBlockingStream(&VirtualSerial_CDC_Interface, &USBSerialStream);
@@ -262,7 +263,11 @@ int main(void)
 		}
 		else
 		{
-			PushLatestSampleData();
+			if (recordFor)
+			{
+				PushLatestSampleData();
+				recordFor--;
+			}
 
 			// send greeting if we've hit our host-timeout and the host is connected
 			if (delay)
@@ -271,6 +276,8 @@ int main(void)
 				if (!delay)
 				{
 					InitialGreeting();
+					recordFor = 5;
+					
 				}
 			}
 		}
