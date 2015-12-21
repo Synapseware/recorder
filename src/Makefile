@@ -42,6 +42,9 @@ LUFA_PATH		= ../LUFA
 CC_FLAGS		= -DUSE_LUFA_CONFIG_HEADER -IConfig/
 LD_FLAGS		= 
 
+PROG			= stk500v2
+PORT			= /dev/ttyACM1
+
 # Default target
 all:
 
@@ -57,8 +60,6 @@ include $(LUFA_PATH)/Build/lufa_avrdude.mk
 include $(LUFA_PATH)/Build/lufa_atprogram.mk
 
 
-#program: all
-#	avrdude -p $(MCU) -P /dev/ttyACM0 -c avrisp2 -U flash:w:$(TARGET).hex
 program: all
-	avrdude -p $(MCU) -B 0.1 -c usbtiny -U flash:w:$(TARGET).hex
+	avrdude -p $(MCU) -P $(PORT) -c $(PROG) -U flash:w:$(TARGET).hex
 
