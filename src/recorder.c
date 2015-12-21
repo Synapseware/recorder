@@ -96,7 +96,7 @@ void SetupExternalAdc(void)
 	ADC_ddr |= (ADC_clk | ADC_ss);
 	ADC_ddr &= ~(ADC_data);
 
-	ADC_port |= (ADC_clk | ADC_ss);
+	ADC_port |= (ADC_clk | ADC_ss | ADC_data);
 }
 
 /**  */
@@ -312,10 +312,6 @@ uint16_t ADC_ReadSample(void)
 	uint8_t bits = 12;
 	uint16_t sample = 0;
 
-	uint8_t sreg = SREG;
-	cli();
-
-
 	// toggle ADC /SS
 	ADC_port &= ~(ADC_ss);
 
@@ -339,9 +335,6 @@ uint16_t ADC_ReadSample(void)
 	// release ADC /SS
 	ADC_port |= (ADC_ss);
 
-	// return the interrupt mask
-	SREG = sreg;
-
 	sample &= 0x0FFF;
 
 	return sample;
@@ -351,7 +344,7 @@ uint16_t ADC_ReadSample(void)
 void SaveSamples(uint8_t * data, int length)
 {
 	// TBD
-
+	// 
 }
 
 /** Event handler for the library USB Configuration Changed event. */
@@ -384,6 +377,12 @@ void EVENT_CDC_Device_ControLineStateChanged(USB_ClassInfo_CDC_Device_t* const C
 		}
 
 		USB_LED_port |= (USB_LED_msk);
+	}
+	else
+	{
+		_hostConnected = false;
+		_greetingSent = false;
+		USB_LED_port &= ~(USB_LED_msk);
 	}
 }
 
