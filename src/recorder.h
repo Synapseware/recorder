@@ -52,6 +52,7 @@
 //-------------------------------------------------
 // External SPI ADC
 #define ADC_port		(PORTB)
+#define ADC_pin_reg		(PINB)
 #define ADC_clk			(1<<PB6)
 #define ADC_data		(1<<PB5)
 #define ADC_ss			(1<<PB4)
@@ -62,6 +63,7 @@
 // DAC methods
 #define DAC_OutStd(v)	((256 * v) / 2.048)
 #define DAC_OutHigh(v)	((256 * v) / 4.096)
+#define DAC_CLK_DIV		8
 void DACOutputHighGain(uint8_t voltage);
 void DACOutputStdGain(uint8_t voltage);
 
