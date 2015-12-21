@@ -96,7 +96,7 @@ void SetupExternalAdc(void)
 	ADC_ddr |= (ADC_clk | ADC_ss);
 	ADC_ddr &= ~(ADC_data);
 
-	ADC_port |= (ADC_clk | ADC_ss | ADC_data);
+	ADC_port |= (ADC_clk | ADC_ss);
 }
 
 /**  */
@@ -148,13 +148,13 @@ void SetupTimers(void)
 					(0<<ICES1)  |
 					(0<<WGM13)  |	// ctc
 					(1<<WGM12)  |	// ctc
-					(0<<CS12)   |	// clk/1
-					(0<<CS11)   |	// clk/1
-					(1<<CS10);		// clk/1
+					(0<<CS12)   |	// clk/8
+					(1<<CS11)   |	// clk/8
+					(0<<CS10);		// clk/8
 
 
 		// Output Compare Register 1 A
-		OCR1A	=	F_CPU / 8000;
+		OCR1A	=	F_CPU / DAC_CLK_DIV / 8000;
 
 		// Timer/Counter1 Interrupt Mask Register
 		TIMSK1  =   (0<<ICIE1)  |
@@ -202,7 +202,7 @@ static void PushLatestSampleData(void)
 	static uint8_t col = 0;
 
 	uint16_t count = RingBuffer_GetCount(&Buffer);
-	if (count < 8)
+	if (count < 2)
 	{
 		return;
 	}
@@ -210,8 +210,11 @@ static void PushLatestSampleData(void)
 	char msg[8];
 	while (count--)
 	{
-		uint8_t data = RingBuffer_Remove(&Buffer);
-		sprintf_P(msg, PSTR("%04x "), data);
+		uint8_t high = RingBuffer_Remove(&Buffer);
+		uint8_t low = RingBuffer_Remove(&Buffer);
+		uint16_t sample = high << 8 | low;
+
+		sprintf_P(msg, PSTR("%04x "), sample);
 		PrintString(msg);
 
 		col++;
@@ -246,8 +249,6 @@ int main(void)
 		if (_secondsTick)
 		{
 			_secondsTick = false;
-			PrintChar('.');
-			PrintFlush();
 		}
 		else
 		{
@@ -322,12 +323,12 @@ uint16_t ADC_ReadSample(void)
 
 		// shift sample
 		sample <<= 1;
-		
+
 		// toggle ADC SCK high
 		ADC_port |= (ADC_clk);
 
 		// add data
-		sample |= ((ADC_port & ADC_data) != 0)
+		sample |= ((ADC_pin_reg & ADC_data) > 0)
 			? 1
 			: 0;
 	}
