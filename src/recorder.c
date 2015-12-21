@@ -5,7 +5,7 @@ volatile bool 		_secondsTick 		= false;
 volatile bool		_hostConnected		= false;
 volatile bool		_greetingSent		= false;
 RingBuffer_t		Buffer;
-uint8_t				BufferData[128];
+uint8_t				BufferData[1024];
 
 
 /** LUFA CDC Class driver interface configuration and state information. This structure is
@@ -247,14 +247,16 @@ int main(void)
 		CDC_Device_USBTask(&VirtualSerial_CDC_Interface);
 		USB_USBTask();
 
-		if (_secondsTick)
+		if (recordFor)
 		{
-			_secondsTick = false;
+			PushLatestSampleData();
 		}
-		else
+
+		if (!_secondsTick)
 		{
 			continue;
 		}
+		_secondsTick = false;
 
 		if (!_hostConnected)
 		{
@@ -265,7 +267,6 @@ int main(void)
 		{
 			if (recordFor)
 			{
-				PushLatestSampleData();
 				recordFor--;
 			}
 
@@ -277,7 +278,7 @@ int main(void)
 				{
 					InitialGreeting();
 					recordFor = 5;
-					
+
 				}
 			}
 		}
