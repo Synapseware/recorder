@@ -1,13 +1,13 @@
 /*
              LUFA Library
-     Copyright (C) Dean Camera, 2015.
+     Copyright (C) Dean Camera, 2014.
 
   dean [at] fourwalledcubicle [dot] com
            www.lufa-lib.org
 */
 
 /*
-  Copyright 2015  Dean Camera (dean [at] fourwalledcubicle [dot] com)
+  Copyright 2014  Dean Camera (dean [at] fourwalledcubicle [dot] com)
 
   Permission to use, copy, modify, distribute, and sell this
   software and its documentation for any purpose is hereby granted
@@ -37,7 +37,6 @@
 
 #include "Descriptors.h"
 
-
 /** Device descriptor structure. This descriptor, located in FLASH memory, describes the overall
  *  device characteristics, including the supported USB version, control endpoint size and the
  *  number of device configurations. The descriptor is read out by the USB host when the enumeration
@@ -47,20 +46,20 @@ const USB_Descriptor_Device_t PROGMEM DeviceDescriptor =
 {
 	.Header                 = {.Size = sizeof(USB_Descriptor_Device_t), .Type = DTYPE_Device},
 
-	.USBSpecification       = VERSION_BCD(1,1,0),
-	.Class                  = CDC_CSCP_CDCClass,
-	.SubClass               = CDC_CSCP_NoSpecificSubclass,
-	.Protocol               = CDC_CSCP_NoSpecificProtocol,
+	.USBSpecification       = VERSION_BCD(2,0,0),
+	.Class                  = USB_CSCP_NoDeviceClass,
+	.SubClass               = USB_CSCP_NoDeviceSubclass,
+	.Protocol               = USB_CSCP_NoDeviceProtocol,
 
 	.Endpoint0Size          = FIXED_CONTROL_ENDPOINT_SIZE,
 
 	.VendorID               = 0x03EB,
-	.ProductID              = 0x2044,
-	.ReleaseNumber          = VERSION_BCD(0,0,1),
+	.ProductID              = 0x2047,
+	.ReleaseNumber          = VERSION_BCD(0,0,2),
 
 	.ManufacturerStrIndex   = STRING_ID_Manufacturer,
 	.ProductStrIndex        = STRING_ID_Product,
-	.SerialNumStrIndex      = USE_INTERNAL_SERIAL,
+	.SerialNumStrIndex      = NO_DESCRIPTOR,
 
 	.NumberOfConfigurations = FIXED_NUM_CONFIGURATIONS
 };
@@ -74,104 +73,172 @@ const USB_Descriptor_Configuration_t PROGMEM ConfigurationDescriptor =
 {
 	.Config =
 		{
-			.Header                 = {.Size = sizeof(USB_Descriptor_Configuration_Header_t), .Type = DTYPE_Configuration},
+			.Header                   = {.Size = sizeof(USB_Descriptor_Configuration_Header_t), .Type = DTYPE_Configuration},
 
-			.TotalConfigurationSize = sizeof(USB_Descriptor_Configuration_t),
-			.TotalInterfaces        = 2,
+			.TotalConfigurationSize   = sizeof(USB_Descriptor_Configuration_t),
+			.TotalInterfaces          = 2,
 
-			.ConfigurationNumber    = 1,
-			.ConfigurationStrIndex  = NO_DESCRIPTOR,
+			.ConfigurationNumber      = 1,
+			.ConfigurationStrIndex    = NO_DESCRIPTOR,
 
-			.ConfigAttributes       = (USB_CONFIG_ATTR_RESERVED | USB_CONFIG_ATTR_SELFPOWERED),
+			.ConfigAttributes         = (USB_CONFIG_ATTR_RESERVED | USB_CONFIG_ATTR_SELFPOWERED),
 
-			.MaxPowerConsumption    = USB_CONFIG_POWER_MA(100)
+			.MaxPowerConsumption      = USB_CONFIG_POWER_MA(100)
 		},
 
-	.CDC_CCI_Interface =
+	.Audio_ControlInterface =
 		{
-			.Header                 = {.Size = sizeof(USB_Descriptor_Interface_t), .Type = DTYPE_Interface},
+			.Header                   = {.Size = sizeof(USB_Descriptor_Interface_t), .Type = DTYPE_Interface},
 
-			.InterfaceNumber        = INTERFACE_ID_CDC_CCI,
-			.AlternateSetting       = 0,
+			.InterfaceNumber          = INTERFACE_ID_AudioControl,
+			.AlternateSetting         = 0,
 
-			.TotalEndpoints         = 1,
+			.TotalEndpoints           = 0,
 
-			.Class                  = CDC_CSCP_CDCClass,
-			.SubClass               = CDC_CSCP_ACMSubclass,
-			.Protocol               = CDC_CSCP_ATCommandProtocol,
+			.Class                    = AUDIO_CSCP_AudioClass,
+			.SubClass                 = AUDIO_CSCP_ControlSubclass,
+			.Protocol                 = AUDIO_CSCP_ControlProtocol,
 
-			.InterfaceStrIndex      = NO_DESCRIPTOR
+			.InterfaceStrIndex        = NO_DESCRIPTOR
 		},
 
-	.CDC_Functional_Header =
+	.Audio_ControlInterface_SPC =
 		{
-			.Header                 = {.Size = sizeof(USB_CDC_Descriptor_FunctionalHeader_t), .Type = DTYPE_CSInterface},
-			.Subtype                = CDC_DSUBTYPE_CSInterface_Header,
+			.Header                   = {.Size = sizeof(USB_Audio_Descriptor_Interface_AC_t), .Type = DTYPE_CSInterface},
+			.Subtype                  = AUDIO_DSUBTYPE_CSInterface_Header,
 
-			.CDCSpecification       = VERSION_BCD(1,1,0),
+			.ACSpecification          = VERSION_BCD(1,0,0),
+			.TotalLength              = (sizeof(USB_Audio_Descriptor_Interface_AC_t) +
+			                             sizeof(USB_Audio_Descriptor_InputTerminal_t) +
+			                             sizeof(USB_Audio_Descriptor_OutputTerminal_t)),
+
+			.InCollection             = 1,
+			.InterfaceNumber          = INTERFACE_ID_AudioStream,
 		},
 
-	.CDC_Functional_ACM =
+	.Audio_InputTerminal =
 		{
-			.Header                 = {.Size = sizeof(USB_CDC_Descriptor_FunctionalACM_t), .Type = DTYPE_CSInterface},
-			.Subtype                = CDC_DSUBTYPE_CSInterface_ACM,
+			.Header                   = {.Size = sizeof(USB_Audio_Descriptor_InputTerminal_t), .Type = DTYPE_CSInterface},
+			.Subtype                  = AUDIO_DSUBTYPE_CSInterface_InputTerminal,
 
-			.Capabilities           = 0x06,
+			.TerminalID               = 0x01,
+			.TerminalType             = AUDIO_TERMINAL_IN_MIC,
+			.AssociatedOutputTerminal = 0x00,
+
+			.TotalChannels            = 1,
+			.ChannelConfig            = 0,
+
+			.ChannelStrIndex          = NO_DESCRIPTOR,
+			.TerminalStrIndex         = NO_DESCRIPTOR
 		},
 
-	.CDC_Functional_Union =
+	.Audio_OutputTerminal =
 		{
-			.Header                 = {.Size = sizeof(USB_CDC_Descriptor_FunctionalUnion_t), .Type = DTYPE_CSInterface},
-			.Subtype                = CDC_DSUBTYPE_CSInterface_Union,
+			.Header                   = {.Size = sizeof(USB_Audio_Descriptor_OutputTerminal_t), .Type = DTYPE_CSInterface},
+			.Subtype                  = AUDIO_DSUBTYPE_CSInterface_OutputTerminal,
 
-			.MasterInterfaceNumber  = INTERFACE_ID_CDC_CCI,
-			.SlaveInterfaceNumber   = INTERFACE_ID_CDC_DCI,
+			.TerminalID               = 0x02,
+			.TerminalType             = AUDIO_TERMINAL_STREAMING,
+			.AssociatedInputTerminal  = 0x00,
+
+			.SourceID                 = 0x01,
+
+			.TerminalStrIndex         = NO_DESCRIPTOR
 		},
 
-	.CDC_NotificationEndpoint =
+	.Audio_StreamInterface_Alt0 =
 		{
-			.Header                 = {.Size = sizeof(USB_Descriptor_Endpoint_t), .Type = DTYPE_Endpoint},
+			.Header                   = {.Size = sizeof(USB_Descriptor_Interface_t), .Type = DTYPE_Interface},
 
-			.EndpointAddress        = CDC_NOTIFICATION_EPADDR,
-			.Attributes             = (EP_TYPE_INTERRUPT | ENDPOINT_ATTR_NO_SYNC | ENDPOINT_USAGE_DATA),
-			.EndpointSize           = CDC_NOTIFICATION_EPSIZE,
-			.PollingIntervalMS      = 0xFF
+			.InterfaceNumber          = INTERFACE_ID_AudioStream,
+			.AlternateSetting         = 0,
+
+			.TotalEndpoints           = 0,
+
+			.Class                    = AUDIO_CSCP_AudioClass,
+			.SubClass                 = AUDIO_CSCP_AudioStreamingSubclass,
+			.Protocol                 = AUDIO_CSCP_StreamingProtocol,
+
+			.InterfaceStrIndex        = NO_DESCRIPTOR
 		},
 
-	.CDC_DCI_Interface =
+	.Audio_StreamInterface_Alt1 =
 		{
-			.Header                 = {.Size = sizeof(USB_Descriptor_Interface_t), .Type = DTYPE_Interface},
+			.Header                   = {.Size = sizeof(USB_Descriptor_Interface_t), .Type = DTYPE_Interface},
 
-			.InterfaceNumber        = INTERFACE_ID_CDC_DCI,
-			.AlternateSetting       = 0,
+			.InterfaceNumber          = INTERFACE_ID_AudioStream,
+			.AlternateSetting         = 1,
 
-			.TotalEndpoints         = 2,
+			.TotalEndpoints           = 1,
 
-			.Class                  = CDC_CSCP_CDCDataClass,
-			.SubClass               = CDC_CSCP_NoDataSubclass,
-			.Protocol               = CDC_CSCP_NoDataProtocol,
+			.Class                    = AUDIO_CSCP_AudioClass,
+			.SubClass                 = AUDIO_CSCP_AudioStreamingSubclass,
+			.Protocol                 = AUDIO_CSCP_StreamingProtocol,
 
-			.InterfaceStrIndex      = NO_DESCRIPTOR
+			.InterfaceStrIndex        = NO_DESCRIPTOR
 		},
 
-	.CDC_DataOutEndpoint =
+	.Audio_StreamInterface_SPC =
 		{
-			.Header                 = {.Size = sizeof(USB_Descriptor_Endpoint_t), .Type = DTYPE_Endpoint},
+			.Header                   = {.Size = sizeof(USB_Audio_Descriptor_Interface_AS_t), .Type = DTYPE_CSInterface},
+			.Subtype                  = AUDIO_DSUBTYPE_CSInterface_General,
 
-			.EndpointAddress        = CDC_RX_EPADDR,
-			.Attributes             = (EP_TYPE_BULK | ENDPOINT_ATTR_NO_SYNC | ENDPOINT_USAGE_DATA),
-			.EndpointSize           = CDC_TXRX_EPSIZE,
-			.PollingIntervalMS      = 0x05
+			.TerminalLink             = 0x02,
+
+			.FrameDelay               = 1,
+			.AudioFormat              = 0x0001
 		},
 
-	.CDC_DataInEndpoint =
+	.Audio_AudioFormat =
 		{
-			.Header                 = {.Size = sizeof(USB_Descriptor_Endpoint_t), .Type = DTYPE_Endpoint},
+			.Header                   = {.Size = sizeof(USB_Audio_Descriptor_Format_t) +
+			                                     sizeof(ConfigurationDescriptor.Audio_AudioFormatSampleRates),
+			                             .Type = DTYPE_CSInterface},
+			.Subtype                  = AUDIO_DSUBTYPE_CSInterface_FormatType,
 
-			.EndpointAddress        = CDC_TX_EPADDR,
-			.Attributes             = (EP_TYPE_BULK | ENDPOINT_ATTR_NO_SYNC | ENDPOINT_USAGE_DATA),
-			.EndpointSize           = CDC_TXRX_EPSIZE,
-			.PollingIntervalMS      = 0x05
+			.FormatType               = 0x01,
+			.Channels                 = 0x01,
+
+			.SubFrameSize             = 0x02,
+			.BitResolution            = 16,
+
+			.TotalDiscreteSampleRates = (sizeof(ConfigurationDescriptor.Audio_AudioFormatSampleRates) / sizeof(USB_Audio_SampleFreq_t))
+		},
+
+	.Audio_AudioFormatSampleRates =
+		{
+			AUDIO_SAMPLE_FREQ(8000) /*,
+			AUDIO_SAMPLE_FREQ(11025),
+			AUDIO_SAMPLE_FREQ(22050),
+			AUDIO_SAMPLE_FREQ(44100),
+			AUDIO_SAMPLE_FREQ(48000),*/
+		},
+
+	.Audio_StreamEndpoint =
+		{
+			.Endpoint =
+				{
+					.Header              = {.Size = sizeof(USB_Audio_Descriptor_StreamEndpoint_Std_t), .Type = DTYPE_Endpoint},
+
+					.EndpointAddress     = AUDIO_STREAM_EPADDR,
+					.Attributes          = (EP_TYPE_ISOCHRONOUS | ENDPOINT_ATTR_SYNC | ENDPOINT_USAGE_DATA),
+					.EndpointSize        = AUDIO_STREAM_EPSIZE,
+					.PollingIntervalMS   = 0x01
+				},
+
+			.Refresh                  = 0,
+			.SyncEndpointNumber       = 0
+		},
+
+	.Audio_StreamEndpoint_SPC =
+		{
+			.Header                   = {.Size = sizeof(USB_Audio_Descriptor_StreamEndpoint_Spc_t), .Type = DTYPE_CSEndpoint},
+			.Subtype                  = AUDIO_DSUBTYPE_CSEndpoint_General,
+
+			.Attributes               = (AUDIO_EP_ACCEPTS_SMALL_PACKETS | AUDIO_EP_SAMPLE_FREQ_CONTROL),
+
+			.LockDelayUnits           = 0x00,
+			.LockDelay                = 0x0000
 		}
 };
 
@@ -185,13 +252,13 @@ const USB_Descriptor_String_t PROGMEM LanguageString = USB_STRING_DESCRIPTOR_ARR
  *  form, and is read out upon request by the host when the appropriate string ID is requested, listed in the Device
  *  Descriptor.
  */
-const USB_Descriptor_String_t PROGMEM ManufacturerString = USB_STRING_DESCRIPTOR(L"Matthew Potter");
+const USB_Descriptor_String_t PROGMEM ManufacturerString = USB_STRING_DESCRIPTOR(L"Dean Camera");
 
 /** Product descriptor string. This is a Unicode string containing the product's details in human readable form,
  *  and is read out upon request by the host when the appropriate string ID is requested, listed in the Device
  *  Descriptor.
  */
-const USB_Descriptor_String_t PROGMEM ProductString = USB_STRING_DESCRIPTOR(L"LUFA CDC Audio Recorder");
+const USB_Descriptor_String_t PROGMEM ProductString = USB_STRING_DESCRIPTOR(L"LUFA Audio In Demo");
 
 /** This function is called by the library when in device mode, and must be overridden (see library "USB Descriptors"
  *  documentation) by the application code so that the address and size of a requested descriptor can be given

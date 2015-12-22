@@ -16,11 +16,15 @@
 
 #include <LUFA/Drivers/Peripheral/Serial.h>
 #include <LUFA/Drivers/Peripheral/SPI.h>
+#include <LUFA/Drivers/Peripheral/ADC.h>
 #include <LUFA/Drivers/Board/LEDs.h>
 #include <LUFA/Drivers/Board/Board.h>
 #include <LUFA/Drivers/USB/USB.h>
 #include <LUFA/Drivers/Misc/RingBuffer.h>
 #include <LUFA/Platform/Platform.h>
+
+//#define USE_TEST_DATA
+#include "sounddata.h"
 
 
 //-------------------------------------------------
@@ -63,10 +67,41 @@
 // DAC methods
 #define DAC_OutStd(v)	((256 * v) / 2.048)
 #define DAC_OutHigh(v)	((256 * v) / 4.096)
-#define DAC_CLK_DIV		8
+#define DAC_CLK_DIV		64
 void DACOutputHighGain(uint8_t voltage);
 void DACOutputStdGain(uint8_t voltage);
 
 
+/** Maximum audio sample value for the microphone input. */
+#define SAMPLE_MAX_RANGE          0xFFFF
+
+/** Maximum ADC range for the microphone input. */
+#define ADC_MAX_RANGE             0x03FF
+
+
+void SetupHardware(void);
+//static int16_t ADC_GetResult(void);
+static int16_t ADC_ReadSample(void);
+
+void EVENT_USB_Device_Connect(void);
+void EVENT_USB_Device_Disconnect(void);
+void EVENT_USB_Device_ConfigurationChanged(void);
+void EVENT_USB_Device_ControlRequest(void);
+
+bool CALLBACK_Audio_Device_GetSetEndpointProperty(
+	USB_ClassInfo_Audio_Device_t* const AudioInterfaceInfo,
+	const uint8_t EndpointProperty,
+	const uint8_t EndpointAddress,
+	const uint8_t EndpointControl,
+	uint16_t* const DataLength,
+	uint8_t* Data) ATTR_NON_NULL_PTR_ARG(1);
+
+bool CALLBACK_Audio_Device_GetSetInterfaceProperty(
+	USB_ClassInfo_Audio_Device_t* const AudioInterfaceInfo,
+	const uint8_t Property,
+	const uint8_t EntityAddress,
+	const uint16_t Parameter,
+	uint16_t* const DataLength,
+	uint8_t* Data);
 
 #endif

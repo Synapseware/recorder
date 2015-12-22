@@ -1,13 +1,13 @@
 /*
              LUFA Library
-     Copyright (C) Dean Camera, 2015.
+     Copyright (C) Dean Camera, 2014.
 
   dean [at] fourwalledcubicle [dot] com
            www.lufa-lib.org
 */
 
 /*
-  Copyright 2015  Dean Camera (dean [at] fourwalledcubicle [dot] com)
+  Copyright 2014  Dean Camera (dean [at] fourwalledcubicle [dot] com)
 
   Permission to use, copy, modify, distribute, and sell this
   software and its documentation for any purpose is hereby granted
@@ -37,27 +37,18 @@
 #define _DESCRIPTORS_H_
 
 	/* Includes: */
-		#include <avr/pgmspace.h>
-
 		#include <LUFA/Drivers/USB/USB.h>
+
+		#include <avr/pgmspace.h>
 
 		#include "Config/AppConfig.h"
 
 	/* Macros: */
-		/** Endpoint address of the CDC device-to-host notification IN endpoint. */
-		#define CDC_NOTIFICATION_EPADDR        (ENDPOINT_DIR_IN  | 2)
+		/** Endpoint address of the Audio isochronous streaming data IN endpoint. */
+		#define AUDIO_STREAM_EPADDR           (ENDPOINT_DIR_IN | 1)
 
-		/** Endpoint address of the CDC device-to-host data IN endpoint. */
-		#define CDC_TX_EPADDR                  (ENDPOINT_DIR_IN  | 3)
-
-		/** Endpoint address of the CDC host-to-device data OUT endpoint. */
-		#define CDC_RX_EPADDR                  (ENDPOINT_DIR_OUT | 4)
-
-		/** Size in bytes of the CDC device-to-host notification IN endpoint. */
-		#define CDC_NOTIFICATION_EPSIZE        8
-
-		/** Size in bytes of the CDC data IN and OUT endpoints. */
-		#define CDC_TXRX_EPSIZE                16
+		/** Endpoint size in bytes of the Audio isochronous streaming data endpoint. */
+		#define AUDIO_STREAM_EPSIZE           64
 
 	/* Type Defines: */
 		/** Type define for the device configuration descriptor structure. This must be defined in the
@@ -66,19 +57,22 @@
 		 */
 		typedef struct
 		{
-			USB_Descriptor_Configuration_Header_t    Config;
+			USB_Descriptor_Configuration_Header_t     Config;
 
-			// CDC Command Interface
-			USB_Descriptor_Interface_t               CDC_CCI_Interface;
-			USB_CDC_Descriptor_FunctionalHeader_t    CDC_Functional_Header;
-			USB_CDC_Descriptor_FunctionalACM_t       CDC_Functional_ACM;
-			USB_CDC_Descriptor_FunctionalUnion_t     CDC_Functional_Union;
-			USB_Descriptor_Endpoint_t                CDC_NotificationEndpoint;
+			// Audio Control Interface
+			USB_Descriptor_Interface_t                Audio_ControlInterface;
+			USB_Audio_Descriptor_Interface_AC_t       Audio_ControlInterface_SPC;
+			USB_Audio_Descriptor_InputTerminal_t      Audio_InputTerminal;
+			USB_Audio_Descriptor_OutputTerminal_t     Audio_OutputTerminal;
 
-			// CDC Data Interface
-			USB_Descriptor_Interface_t               CDC_DCI_Interface;
-			USB_Descriptor_Endpoint_t                CDC_DataOutEndpoint;
-			USB_Descriptor_Endpoint_t                CDC_DataInEndpoint;
+			// Audio Streaming Interface
+			USB_Descriptor_Interface_t                Audio_StreamInterface_Alt0;
+			USB_Descriptor_Interface_t                Audio_StreamInterface_Alt1;
+			USB_Audio_Descriptor_Interface_AS_t       Audio_StreamInterface_SPC;
+			USB_Audio_Descriptor_Format_t             Audio_AudioFormat;
+			USB_Audio_SampleFreq_t                    Audio_AudioFormatSampleRates[1];
+			USB_Audio_Descriptor_StreamEndpoint_Std_t Audio_StreamEndpoint;
+			USB_Audio_Descriptor_StreamEndpoint_Spc_t Audio_StreamEndpoint_SPC;
 		} USB_Descriptor_Configuration_t;
 
 		/** Enum for the device interface descriptor IDs within the device. Each interface descriptor
@@ -87,8 +81,8 @@
 		 */
 		enum InterfaceDescriptors_t
 		{
-			INTERFACE_ID_CDC_CCI = 0, /**< CDC CCI interface descriptor ID */
-			INTERFACE_ID_CDC_DCI = 1, /**< CDC DCI interface descriptor ID */
+			INTERFACE_ID_AudioControl = 0, /**< Audio control interface descriptor ID */
+			INTERFACE_ID_AudioStream  = 1, /**< Audio stream interface descriptor ID */
 		};
 
 		/** Enum for the device string descriptor IDs within the device. Each string descriptor should

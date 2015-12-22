@@ -3,74 +3,31 @@
 
 volatile bool 		_secondsTick 		= false;
 volatile bool		_hostConnected		= false;
-volatile bool		_greetingSent		= false;
-RingBuffer_t		Buffer;
-uint8_t				BufferData[1024];
+volatile bool		_readSample			= false;
+volatile int16_t	_lastSample			= 1023;
+
+/** Current audio sampling frequency of the streaming audio endpoint. */
+static uint32_t CurrentAudioSampleFrequency = 8000;
 
 
 /** LUFA CDC Class driver interface configuration and state information. This structure is
  *  passed to all CDC Class driver functions, so that multiple instances of the same class
  *  within a device can be differentiated from one another.
  */
-USB_ClassInfo_CDC_Device_t VirtualSerial_CDC_Interface =
+USB_ClassInfo_Audio_Device_t Microphone_Audio_Interface =
 	{
 		.Config =
 			{
-				.ControlInterfaceNumber = INTERFACE_ID_CDC_CCI,
-				.DataINEndpoint 		=
+				.ControlInterfaceNumber   = INTERFACE_ID_AudioControl,
+				.StreamingInterfaceNumber = INTERFACE_ID_AudioStream,
+				.DataINEndpoint           =
 					{
-						.Address		= CDC_TX_EPADDR,
-						.Size			= CDC_TXRX_EPSIZE,
-						.Banks			= 1,
-					},
-				.DataOUTEndpoint =
-					{
-						.Address		= CDC_RX_EPADDR,
-						.Size			= CDC_TXRX_EPSIZE,
-						.Banks			= 1,
-					},
-				.NotificationEndpoint =
-					{
-						.Address		= CDC_NOTIFICATION_EPADDR,
-						.Size			= CDC_NOTIFICATION_EPSIZE,
-						.Banks			= 1,
+						.Address          = AUDIO_STREAM_EPADDR,
+						.Size             = AUDIO_STREAM_EPSIZE,
+						.Banks            = 2,
 					},
 			},
 	};
-
-/** Standard file stream for the CDC interface when set up, so that the virtual CDC COM port can be
- *  used like any regular character stream in the C APIs.
- */
-static FILE USBSerialStream;
-
-static void PrintString_P(const char* message)
-{
-	if (!_hostConnected || NULL == message)
-		return;
-
-	fputs_P(message, &USBSerialStream);
-}
-static void PrintString(const char* message)
-{
-	if (!_hostConnected || NULL == message)
-		return;
-
-	fputs(message, &USBSerialStream);
-}
-static void PrintChar(char data)
-{
-	if (!_hostConnected)
-		return;
-
-	fputc(data, &USBSerialStream);
-}
-static void PrintFlush(void)
-{
-	if (!_hostConnected)
-		return;
-	CDC_Device_Flush(&VirtualSerial_CDC_Interface);
-}
-
 
 /**  */
 void SetupSpi(void)
@@ -97,13 +54,15 @@ void SetupExternalAdc(void)
 	ADC_ddr &= ~(ADC_data);
 
 	ADC_port |= (ADC_clk | ADC_ss);
+
+	DACOutputStdGain(DAC_OutStd(0.5));
 }
 
 /**  */
 void SetupTimers(void)
 {
 	// setup timer0 for 1ms interrupts
-	{
+	/*{
 		// Fcpu / 64 / 250 = 1ms
 		// 16MHz / 64 / 250 = 1ms
 		// Timer/Counter Control Register A
@@ -129,7 +88,7 @@ void SetupTimers(void)
 		TIMSK0  =   (0<<OCIE0B)	|
 					(1<<OCIE0A)	|
 					(0<<TOIE0);
-	}
+	}*/
 
 	// setup timer1 for whatever ADC conversion rate we want
 	{
@@ -148,13 +107,13 @@ void SetupTimers(void)
 					(0<<ICES1)  |
 					(0<<WGM13)  |	// ctc
 					(1<<WGM12)  |	// ctc
-					(0<<CS12)   |	// clk/8
-					(1<<CS11)   |	// clk/8
-					(0<<CS10);		// clk/8
+					(0<<CS12)   |	// clk/64
+					(1<<CS11)   |	// clk/64
+					(1<<CS10);		// clk/64
 
 
 		// Output Compare Register 1 A
-		OCR1A	=	F_CPU / DAC_CLK_DIV / 8000;
+		OCR1A	=	F_CPU / DAC_CLK_DIV / 1000;
 
 		// Timer/Counter1 Interrupt Mask Register
 		TIMSK1  =   (0<<ICIE1)  |
@@ -170,16 +129,27 @@ void SetupHardware(void)
 {
 	_secondsTick = false;
 	_hostConnected = false;
-	_greetingSent = false;
-
-	RingBuffer_InitBuffer(&Buffer, BufferData, sizeof(BufferData));
 
 	power_all_enable();
 	SetupSpi();
 	SetupTimers();
-	SetupExternalAdc();
+	//SetupExternalAdc();
+
+#if (ARCH == ARCH_AVR8)
+	/* Disable watchdog if enabled by bootloader/fuses */
+	MCUSR &= ~(1 << WDRF);
+	wdt_disable();
+
+	/* Disable clock division */
+	clock_prescale_set(clock_div_1);
+#endif
+
+	ADC_Init(ADC_FREE_RUNNING | ADC_PRESCALE_32);
+	ADC_SetupChannel(MIC_IN_ADC_CHANNEL);
 
 	USB_Init();
+
+	ADC_StartReading(ADC_REFERENCE_AVCC | ADC_RIGHT_ADJUSTED | ADC_GET_CHANNEL_MASK(MIC_IN_ADC_CHANNEL));
 
 	// setup debug LED
 	DEBUG_LED_ddr |= (DEBUG_LED_msk);
@@ -189,99 +159,22 @@ void SetupHardware(void)
 }
 
 /**  */
-static void InitialGreeting(void)
-{
-	PrintString_P(PSTR("Audio Recorder and Sampling Prototype\r\n"));
-	PrintString_P(PSTR("November, 2015\r\n"));
-	PrintFlush();
-}
-
-/**  */
-static void PushLatestSampleData(void)
-{
-	static uint8_t col = 0;
-
-	uint16_t count = RingBuffer_GetCount(&Buffer);
-	if (count < 2)
-	{
-		return;
-	}
-
-	char msg[8];
-	while (count--)
-	{
-		uint8_t high = RingBuffer_Remove(&Buffer);
-		uint8_t low = RingBuffer_Remove(&Buffer);
-		uint16_t sample = high << 8 | low;
-
-		sprintf_P(msg, PSTR("%04x "), sample);
-		PrintString(msg);
-
-		col++;
-		if (col > 15)
-		{
-			col = 0;
-			PrintString_P(PSTR("\r\n"));
-		}
-	}
-
-	PrintFlush();
-}
-
-/**  */
 int main(void)
 {
 	SetupHardware();
-	uint8_t delay = 1;
-	uint8_t recordFor = 0;
-
-	/* Create a regular blocking character stream for the interface so that it can be used with the stdio.h functions */
-	CDC_Device_CreateBlockingStream(&VirtualSerial_CDC_Interface, &USBSerialStream);
 
 	GlobalInterruptEnable();
 
-	DACOutputStdGain(DAC_OutStd(0.5));
-
 	while(1)
 	{
-		CDC_Device_USBTask(&VirtualSerial_CDC_Interface);
+		if (_readSample)
+		{
+			_lastSample = ADC_ReadSample();
+			_readSample = false;
+		}
+
+		Audio_Device_USBTask(&Microphone_Audio_Interface);
 		USB_USBTask();
-
-		if (recordFor)
-		{
-			PushLatestSampleData();
-		}
-
-		if (!_secondsTick)
-		{
-			continue;
-		}
-		_secondsTick = false;
-
-		if (!_hostConnected)
-		{
-			// reset the host-connected delay
-			delay = 1;
-		}
-		else
-		{
-			if (recordFor)
-			{
-				recordFor--;
-			}
-
-			// send greeting if we've hit our host-timeout and the host is connected
-			if (delay)
-			{
-				delay--;
-				if (!delay)
-				{
-					InitialGreeting();
-					recordFor = 5;
-
-				}
-			}
-		}
 	}
 }
 
@@ -316,10 +209,10 @@ void DACOutputStdGain(uint8_t voltage)
 }
 
 /** Reads a 12-bit sample from the ADC */
-uint16_t ADC_ReadSample(void)
+static int16_t ADC_ReadSample(void)
 {
 	uint8_t bits = 12;
-	uint16_t sample = 0;
+	int16_t sample = 0;
 
 	// toggle ADC /SS
 	ADC_port &= ~(ADC_ss);
@@ -346,61 +239,37 @@ uint16_t ADC_ReadSample(void)
 
 	sample &= 0x0FFF;
 
-	return sample;
-}
-
-/** Writes the block of data to the SRAM device */
-void SaveSamples(uint8_t * data, int length)
-{
-	// TBD
-	// 
-}
-
-/** Event handler for the library USB Configuration Changed event. */
-void EVENT_USB_Device_ConfigurationChanged(void)
-{
-	// 
-	CDC_Device_ConfigureEndpoints(&VirtualSerial_CDC_Interface);
-}
-
-/** Event handler for the library USB Control Request reception event. */
-void EVENT_USB_Device_ControlRequest(void)
-{
-	// 
-	CDC_Device_ProcessControlRequest(&VirtualSerial_CDC_Interface);
+	return sample; // - 1023;
 }
 
 /**  */
-void EVENT_CDC_Device_ControLineStateChanged(USB_ClassInfo_CDC_Device_t* const CDCInterfaceInfo)
+static int16_t ADC_GetResultOld(void)
 {
-	bool CurrentDTRState = (CDCInterfaceInfo->State.ControlLineStates.HostToDevice & CDC_CONTROL_LINE_OUT_DTR);
+	#ifdef USE_TEST_DATA
+		static uint16_t index = 0;
 
-	/* Check if the DTR line has been asserted - if so, start the target AVR's reset pulse */
-	if (CurrentDTRState)
-	{
-		_hostConnected = true;
-		
-		if (!_greetingSent)
-		{
-			_greetingSent = true;
-		}
+		uint8_t sample = pgm_read_byte(&TEST_SOUND[index++]);
+		if (index >= TEST_SOUND_LEN)
+			index = 0;
 
-		USB_LED_port |= (USB_LED_msk);
-	}
-	else
-	{
-		_hostConnected = false;
-		_greetingSent = false;
-		USB_LED_port &= ~(USB_LED_msk);
-	}
+		return sample;
+	#else
+		return _lastSample;
+	#endif
 }
 
 /** Event handler for the library USB Connection event. */
 void EVENT_USB_Device_Connect(void)
 {
 	// mark host as connected
-	//_hostConnected = true;
-	//USB_LED_port |= (USB_LED_msk);
+	_hostConnected = true;
+	USB_LED_port |= (USB_LED_msk);
+
+	/* Sample reload timer initialization */
+	TIMSK0  = (1 << OCIE0A);
+	OCR0A   = ((F_CPU / 8 / CurrentAudioSampleFrequency) - 1);
+	TCCR0A  = (1 << WGM01);  // CTC mode
+	TCCR0B  = (1 << CS01);   // Fcpu/8 speed
 }
 
 /** Event handler for the library USB Disconnection event. */
@@ -408,12 +277,154 @@ void EVENT_USB_Device_Disconnect(void)
 {
 	// mark host as not connected
 	_hostConnected = false;
-	_greetingSent = false;
 	USB_LED_port &= ~(USB_LED_msk);
+
+	/* Stop the sample reload timer */
+	TCCR0B = 0;
+}
+
+/** Event handler for the library USB Configuration Changed event. */
+void EVENT_USB_Device_ConfigurationChanged(void)
+{
+	// 
+	Audio_Device_ConfigureEndpoints(&Microphone_Audio_Interface);
+}
+
+/** Event handler for the library USB Control Request reception event. */
+void EVENT_USB_Device_ControlRequest(void)
+{
+	// 
+	Audio_Device_ProcessControlRequest(&Microphone_Audio_Interface);
+}
+
+/** Audio class driver callback for the setting and retrieval of streaming endpoint properties. This callback must be implemented
+ *  in the user application to handle property manipulations on streaming audio endpoints.
+ *
+ *  When the DataLength parameter is NULL, this callback should only indicate whether the specified operation is valid for
+ *  the given endpoint index, and should return as fast as possible. When non-NULL, this value may be altered for GET operations
+ *  to indicate the size of the retrieved data.
+ *
+ *  \note The length of the retrieved data stored into the Data buffer on GET operations should not exceed the initial value
+ *        of the \c DataLength parameter.
+ *
+ *  \param[in,out] AudioInterfaceInfo  Pointer to a structure containing an Audio Class configuration and state.
+ *  \param[in]     EndpointProperty    Property of the endpoint to get or set, a value from Audio_ClassRequests_t.
+ *  \param[in]     EndpointAddress     Address of the streaming endpoint whose property is being referenced.
+ *  \param[in]     EndpointControl     Parameter of the endpoint to get or set, a value from Audio_EndpointControls_t.
+ *  \param[in,out] DataLength          For SET operations, the length of the parameter data to set. For GET operations, the maximum
+ *                                     length of the retrieved data. When NULL, the function should return whether the given property
+ *                                     and parameter is valid for the requested endpoint without reading or modifying the Data buffer.
+ *  \param[in,out] Data                Pointer to a location where the parameter data is stored for SET operations, or where
+ *                                     the retrieved data is to be stored for GET operations.
+ *
+ *  \return Boolean \c true if the property get/set was successful, \c false otherwise
+ */
+bool CALLBACK_Audio_Device_GetSetEndpointProperty(USB_ClassInfo_Audio_Device_t* const AudioInterfaceInfo,
+                                                  const uint8_t EndpointProperty,
+                                                  const uint8_t EndpointAddress,
+                                                  const uint8_t EndpointControl,
+                                                  uint16_t* const DataLength,
+                                                  uint8_t* Data)
+{
+	/* Check the requested endpoint to see if a supported endpoint is being manipulated */
+	if (EndpointAddress == Microphone_Audio_Interface.Config.DataINEndpoint.Address)
+	{
+		/* Check the requested control to see if a supported control is being manipulated */
+		if (EndpointControl == AUDIO_EPCONTROL_SamplingFreq)
+		{
+			switch (EndpointProperty)
+			{
+				case AUDIO_REQ_SetCurrent:
+					/* Check if we are just testing for a valid property, or actually adjusting it */
+					if (DataLength != NULL)
+					{
+						/* Set the new sampling frequency to the value given by the host */
+						CurrentAudioSampleFrequency = (((uint32_t)Data[2] << 16) | ((uint32_t)Data[1] << 8) | (uint32_t)Data[0]);
+
+						/* Adjust sample reload timer to the new frequency */
+						OCR0A = ((F_CPU / 8 / CurrentAudioSampleFrequency) - 1);
+					}
+
+					return true;
+				case AUDIO_REQ_GetCurrent:
+					/* Check if we are just testing for a valid property, or actually reading it */
+					if (DataLength != NULL)
+					{
+						*DataLength = 3;
+
+						Data[2] = (CurrentAudioSampleFrequency >> 16);
+						Data[1] = (CurrentAudioSampleFrequency >> 8);
+						Data[0] = (CurrentAudioSampleFrequency &  0xFF);
+					}
+
+					return true;
+			}
+		}
+	}
+
+	return false;
+}
+
+/** Audio class driver callback for the setting and retrieval of streaming interface properties. This callback must be implemented
+ *  in the user application to handle property manipulations on streaming audio interfaces.
+ *
+ *  When the DataLength parameter is NULL, this callback should only indicate whether the specified operation is valid for
+ *  the given entity and should return as fast as possible. When non-NULL, this value may be altered for GET operations
+ *  to indicate the size of the retrieved data.
+ *
+ *  \note The length of the retrieved data stored into the Data buffer on GET operations should not exceed the initial value
+ *        of the \c DataLength parameter.
+ *
+ *  \param[in,out] AudioInterfaceInfo  Pointer to a structure containing an Audio Class configuration and state.
+ *  \param[in]     Property            Property of the interface to get or set, a value from Audio_ClassRequests_t.
+ *  \param[in]     EntityAddress       Address of the audio entity whose property is being referenced.
+ *  \param[in]     Parameter           Parameter of the entity to get or set, specific to each type of entity (see USB Audio specification).
+ *  \param[in,out] DataLength          For SET operations, the length of the parameter data to set. For GET operations, the maximum
+ *                                     length of the retrieved data. When NULL, the function should return whether the given property
+ *                                     and parameter is valid for the requested endpoint without reading or modifying the Data buffer.
+ *  \param[in,out] Data                Pointer to a location where the parameter data is stored for SET operations, or where
+ *                                     the retrieved data is to be stored for GET operations.
+ *
+ *  \return Boolean \c true if the property GET/SET was successful, \c false otherwise
+ */
+bool CALLBACK_Audio_Device_GetSetInterfaceProperty(USB_ClassInfo_Audio_Device_t* const AudioInterfaceInfo,
+                                                   const uint8_t Property,
+                                                   const uint8_t EntityAddress,
+                                                   const uint16_t Parameter,
+                                                   uint16_t* const DataLength,
+                                                   uint8_t* Data)
+{
+	/* No audio interface entities in the device descriptor, thus no properties to get or set. */
+	return false;
+}
+
+/** ISR to handle the reloading of the data endpoint with the next sample. */
+ISR(TIMER0_COMPA_vect, ISR_BLOCK)
+{
+	uint8_t PrevEndpoint = Endpoint_GetCurrentEndpoint();
+
+	/* Check that the USB bus is ready for the next sample to write */
+	if (Audio_Device_IsReadyForNextSample(&Microphone_Audio_Interface))
+	{
+		/* Audio sample is ADC value scaled to fit the entire range */
+		int16_t AudioSample = ((SAMPLE_MAX_RANGE / ADC_MAX_RANGE) * ADC_GetResult());
+		#ifndef USE_TEST_DATA
+			//_readSample = true;
+		#endif
+
+		#if defined(MICROPHONE_BIASED_TO_HALF_RAIL)
+		/* Microphone is biased to half rail voltage, subtract the bias from the sample value */
+		AudioSample -= (SAMPLE_MAX_RANGE / 2);
+		#endif
+
+		Audio_Device_WriteSample16(&Microphone_Audio_Interface, AudioSample);
+	}
+
+	Endpoint_SelectEndpoint(PrevEndpoint);
 }
 
 /** Millisecond heartbeats */
-ISR(TIMER0_COMPA_vect)
+ISR(TIMER1_COMPA_vect)
 {
 	static int ticks = 0;
 
@@ -439,13 +450,4 @@ ISR(TIMER0_COMPA_vect)
 		ticks = 0;
 		_secondsTick = true;
 	}
-}
-
-/** ADC sample & save interrupt handler */
-ISR(TIMER1_COMPA_vect)
-{
-	uint16_t sample = ADC_ReadSample();
-
-	RingBuffer_Insert(&Buffer, sample >> 8);
-	RingBuffer_Insert(&Buffer, sample & 0xFF);
 }
