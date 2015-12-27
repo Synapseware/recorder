@@ -43,7 +43,7 @@ CC_FLAGS		= -DUSE_LUFA_CONFIG_HEADER -IConfig/
 LD_FLAGS		= 
 
 PROG			= stk500v2
-PORT			= /dev/ttyACM1
+PORT			= /dev/ttyACM0
 
 # Default target
 all:

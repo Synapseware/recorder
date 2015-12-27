@@ -55,7 +55,7 @@ void SetupExternalAdc(void)
 
 	ADC_port |= (ADC_clk | ADC_ss);
 
-	DACOutputStdGain(DAC_OutStd(0.5));
+	DACOutputStdGain(DAC_OutStd(2.5));
 }
 
 /**  */
@@ -135,14 +135,14 @@ void SetupHardware(void)
 	SetupTimers();
 	//SetupExternalAdc();
 
-#if (ARCH == ARCH_AVR8)
+	#if (ARCH == ARCH_AVR8)
 	/* Disable watchdog if enabled by bootloader/fuses */
 	MCUSR &= ~(1 << WDRF);
 	wdt_disable();
 
 	/* Disable clock division */
 	clock_prescale_set(clock_div_1);
-#endif
+	#endif
 
 	ADC_Init(ADC_FREE_RUNNING | ADC_PRESCALE_32);
 	ADC_SetupChannel(MIC_IN_ADC_CHANNEL);
@@ -243,19 +243,10 @@ static int16_t ADC_ReadSample(void)
 }
 
 /**  */
-static int16_t ADC_GetResultOld(void)
+static int16_t ADC_GetSample(void)
 {
-	#ifdef USE_TEST_DATA
-		static uint16_t index = 0;
-
-		uint8_t sample = pgm_read_byte(&TEST_SOUND[index++]);
-		if (index >= TEST_SOUND_LEN)
-			index = 0;
-
-		return sample;
-	#else
-		return _lastSample;
-	#endif
+	// return the last conversion result
+	return _lastSample;
 }
 
 /** Event handler for the library USB Connection event. */
@@ -407,14 +398,12 @@ ISR(TIMER0_COMPA_vect, ISR_BLOCK)
 	if (Audio_Device_IsReadyForNextSample(&Microphone_Audio_Interface))
 	{
 		/* Audio sample is ADC value scaled to fit the entire range */
-		int16_t AudioSample = ((SAMPLE_MAX_RANGE / ADC_MAX_RANGE) * ADC_GetResult());
-		#ifndef USE_TEST_DATA
-			//_readSample = true;
-		#endif
+		int16_t AudioSample = ((SAMPLE_MAX_RANGE / ADC_MAX_RANGE) * ADC_GetSample());
+		_readSample = true;
 
 		#if defined(MICROPHONE_BIASED_TO_HALF_RAIL)
 		/* Microphone is biased to half rail voltage, subtract the bias from the sample value */
-		AudioSample -= (SAMPLE_MAX_RANGE / 2);
+		//AudioSample -= (SAMPLE_MAX_RANGE / 2);
 		#endif
 
 		Audio_Device_WriteSample16(&Microphone_Audio_Interface, AudioSample);

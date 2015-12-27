@@ -23,8 +23,6 @@
 #include <LUFA/Drivers/Misc/RingBuffer.h>
 #include <LUFA/Platform/Platform.h>
 
-//#define USE_TEST_DATA
-#include "sounddata.h"
 
 
 //-------------------------------------------------
@@ -80,8 +78,8 @@ void DACOutputStdGain(uint8_t voltage);
 
 
 void SetupHardware(void);
-//static int16_t ADC_GetResult(void);
 static int16_t ADC_ReadSample(void);
+static int16_t ADC_GetSample(void);
 
 void EVENT_USB_Device_Connect(void);
 void EVENT_USB_Device_Disconnect(void);

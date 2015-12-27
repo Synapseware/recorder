@@ -207,11 +207,11 @@ const USB_Descriptor_Configuration_t PROGMEM ConfigurationDescriptor =
 
 	.Audio_AudioFormatSampleRates =
 		{
-			AUDIO_SAMPLE_FREQ(8000) /*,
+			AUDIO_SAMPLE_FREQ(8000),
 			AUDIO_SAMPLE_FREQ(11025),
 			AUDIO_SAMPLE_FREQ(22050),
 			AUDIO_SAMPLE_FREQ(44100),
-			AUDIO_SAMPLE_FREQ(48000),*/
+			AUDIO_SAMPLE_FREQ(48000)
 		},
 
 	.Audio_StreamEndpoint =
